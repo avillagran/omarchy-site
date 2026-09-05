@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
-import type { FieldGlyph } from './HeroPixelField'
+import type {
+  FieldGlyph,
+  HeroPixelField as HeroPixelFieldComponent,
+} from './HeroPixelField'
+import { TtfxWordmarkCanvas } from './TtfxWordmarkCanvas'
 import { cn } from '@/lib/utils'
 
-type Field = typeof import('./HeroPixelField').HeroPixelField
+type Field = typeof HeroPixelFieldComponent
 
 type Props = {
   onPainted?: () => void
@@ -50,6 +54,7 @@ export function HeroShader({ onPainted, glyph, onGlyphPress }: Props) {
           onGlyphPress={onGlyphPress}
         />
       ) : null}
+      <TtfxWordmarkCanvas />
     </div>
   )
 }

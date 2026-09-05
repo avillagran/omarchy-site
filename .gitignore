@@ -15,3 +15,5 @@ __unconfig*
 todos.json
 __pycache__/
 .vscode/
+wasm/**/target/
+.hermes-omarchy-web.nginx

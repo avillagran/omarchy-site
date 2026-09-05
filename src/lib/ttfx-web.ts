@@ -1,0 +1,45 @@
+export const WEB_TTFX_EFFECTS = [
+  'thunderstorm',
+  'beams',
+  'binarypath',
+  'blackhole',
+  'bouncyballs',
+  'bubbles',
+  'burn',
+  'colorshift',
+  'crumble',
+  'decrypt',
+  'errorcorrect',
+  'expand',
+  'fireworks',
+  'highlight',
+  'laseretch',
+  'middleout',
+  'orbittingvolley',
+  'overflow',
+  'pour',
+  'print',
+  'randomsequence',
+  'rings',
+  'scattered',
+  'slice',
+  'slide',
+  'smoke',
+  'spotlights',
+  'spray',
+  'swarm',
+  'sweep',
+  'synthgrid',
+  'unstable',
+  'vhstape',
+  'waves',
+  'wipe',
+  'matrix',
+  'rain',
+] as const
+
+export type WebTtfxEffect = (typeof WEB_TTFX_EFFECTS)[number]
+
+export const WEB_TTFX_EFFECT_KEY = 'omarchy-ttfx-effect-v2'
+export const WEB_TTFX_EFFECT_EVENT = 'omarchy:ttfx-effect-change'
+export const WEB_TTFX_READY_EVENT = 'omarchy:ttfx-ready'

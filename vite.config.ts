@@ -1,4 +1,11 @@
-import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
+import {
+  copyFileSync,
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+} from 'node:fs'
 import path from 'node:path'
 import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
@@ -88,6 +95,25 @@ function siteFiles(): Plugin {
   }
 }
 
+function copyTtfxRuntime(): Plugin {
+  return {
+    name: 'copy-ttfx-runtime',
+    apply: 'build',
+    closeBundle() {
+      const runtime = [
+        'assets/js/ttfx-audio/ttfx_audio.js',
+        'assets/js/ttfx-audio/ttfx_audio_bg.wasm',
+        'assets/js/wte/paint.js',
+      ]
+      for (const source of runtime) {
+        const target = path.resolve('dist/client', source)
+        mkdirSync(path.dirname(target), { recursive: true })
+        copyFileSync(path.resolve(source), target)
+      }
+    },
+  }
+}
+
 function portedPages() {
   const pages = JSON.parse(
     readFileSync(new URL('./src/data/pages.json', import.meta.url), 'utf8'),
@@ -116,6 +142,7 @@ const config = defineConfig({
   plugins: [
     ignoreLegacySiteCss(),
     siteFiles(),
+    copyTtfxRuntime(),
     devtools(),
     tailwindcss(),
     // The site ships as a folder of static files, the way omarchy.org is

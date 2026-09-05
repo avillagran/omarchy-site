@@ -14,6 +14,7 @@ import {
 import { OmarchyWordmark } from '@/components/Brand'
 import { HeroNavGhost } from '@/components/SiteHeader'
 import { HeroShader } from '@/components/HeroShader'
+import { TtfxEffectSelector } from '@/components/TtfxEffectSelector'
 import { InstallCommand } from '@/components/InstallCommand'
 import { CardRail } from '@/components/CardRail'
 import { Figures } from '@/components/Figures'
@@ -217,6 +218,15 @@ function Home() {
         style={{ background: 'var(--t-field-bg)' }}
       >
         <HeroShader onPainted={() => setPainted(true)} />
+        <TtfxEffectSelector />
+        {/* One positioned slot shared by the initial mask, field and WASM. */}
+        <OmarchyWordmark
+          data-hero-wordmark
+          className={
+            'hero-wordmark-slot text-[color:var(--t-field-lit)]' +
+            (painted ? ' invisible' : '')
+          }
+        />
 
         {/* The bar's labels, blended against the canvas. They have to live in
             here to reach it: the real header is sticky, and a sticky element
@@ -229,21 +239,11 @@ function Home() {
             the copy at the very bottom, and the eye had to read the foot of
             the screen. */}
         <div className="pointer-events-none relative flex flex-1 flex-col items-center px-6">
-          <div className="flex-1" />
-          {/* The slot the field measures its cell size from. Server-rendered
-              as the SVG so the wordmark is there before any script runs, then
-              handed over to the canvas once it has painted the same pixels. */}
-          {/* In the same bands the field paints the word at rest: five rows
-              of crest, two of hover, four of lit, three of mid, five of dim,
-              over the nineteen rows of the mask. So the handover to the
-              canvas changes no pixel. */}
-          <OmarchyWordmark
-            data-hero-wordmark
-            className={
-              'w-[88%] max-w-4xl text-[color:var(--t-field-lit)]' +
-              (painted ? ' invisible' : '')
-            }
-            background="linear-gradient(to bottom, var(--t-field-crest) 0 26.316%, var(--t-field-hover) 26.316% 36.842%, var(--t-field-lit) 36.842% 57.895%, var(--t-field-mid) 57.895% 73.684%, var(--t-field-dim) 73.684% 100%)"
+          {/* Preserve the copy/CTA spacing independently of the logo position. */}
+          <div className="flex-[2.1]" />
+          <div
+            aria-hidden="true"
+            className="w-[88%] max-w-4xl aspect-[4131/950]"
           />
           {/* Straight under the word, five cells of the lattice down, on
               every screen. */}

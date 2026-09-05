@@ -1,6 +1,18 @@
 import { useEffect, useRef } from 'react'
 import { OPEN_PICKER_EVENT, PICKER_STATE_EVENT, THEME_EVENT } from '@/lib/theme'
 import { GRID_CLEAR_EVENT, GRID_EVENT } from '@/lib/pixel-grid'
+import { omarchyRadio } from '@/lib/omarchy-radio'
+import {
+  normalizeSettings,
+  TTFX_SETTINGS_EVENT,
+  TTFX_SETTINGS_KEY,
+} from '@/lib/ttfx-settings'
+import {
+  WEB_TTFX_EFFECTS,
+  WEB_TTFX_EFFECT_EVENT,
+  WEB_TTFX_EFFECT_KEY,
+  WEB_TTFX_READY_EVENT,
+} from '@/lib/ttfx-web'
 import {
   WORDMARK_HEIGHT,
   WORDMARK_ROWS,
@@ -335,6 +347,16 @@ export function HeroPixelField({
     ).matches
     const noise = buildNoise(0x9ece6a)
     const jitter = buildJitter(0x0a1f14)
+    const audioAnalysis = omarchyRadio.analysis
+    let backgroundScale = 1
+    let cursorScale = 1
+    try {
+      const savedSettings = normalizeSettings(
+        JSON.parse(localStorage.getItem(TTFX_SETTINGS_KEY) ?? '{}'),
+      )
+      backgroundScale = savedSettings.backgroundScale
+      cursorScale = savedSettings.cursorScale
+    } catch {}
 
     // Re-read the palette when the theme changes; the next frame paints in
     // the new colors. Reduced motion repaints once, immediately.
@@ -438,6 +460,51 @@ export function HeroPixelField({
     let logoHoverTarget = 0
     let logoPending = false
     let pickerOpen = false
+    // The WASM canvas may be ready before this lazy field mounts, or before
+    // this effect reattaches. Do not resurrect the static logo in that case.
+    let ttfxActive =
+      host.querySelector<HTMLCanvasElement>('[data-ttfx-canvas]')?.dataset
+        .engine === 'avillagran-ttfx-wasm'
+    canvas.dataset.ttfxActive = String(ttfxActive)
+    const savedEffect = sessionStorage.getItem(WEB_TTFX_EFFECT_KEY)
+    let effectIndex = Math.max(
+      0,
+      WEB_TTFX_EFFECTS.indexOf(
+        savedEffect as (typeof WEB_TTFX_EFFECTS)[number],
+      ),
+    )
+    canvas.dataset.effect = WEB_TTFX_EFFECTS[effectIndex]
+
+    const playEffect = () => {
+      const effect = WEB_TTFX_EFFECTS[effectIndex]
+      canvas.dataset.effect = effect
+      sessionStorage.setItem(WEB_TTFX_EFFECT_KEY, effect)
+      window.dispatchEvent(
+        new CustomEvent(WEB_TTFX_EFFECT_EVENT, {
+          detail: { effect, effectIndex },
+        }),
+      )
+    }
+
+    const nextEffect = () => {
+      effectIndex = (effectIndex + 1) % WEB_TTFX_EFFECTS.length
+      playEffect()
+    }
+
+    const onTtfxReady = () => {
+      ttfxActive = true
+      canvas.dataset.ttfxActive = 'true'
+      if (measure()) draw(performance.now())
+    }
+    const onTtfxEffect = (event: Event) => {
+      const effect = (event as CustomEvent<{ effect?: string }>).detail.effect
+      const index = WEB_TTFX_EFFECTS.indexOf(
+        effect as (typeof WEB_TTFX_EFFECTS)[number],
+      )
+      if (index >= 0) effectIndex = index
+    }
+    window.addEventListener(WEB_TTFX_READY_EVENT, onTtfxReady)
+    window.addEventListener(WEB_TTFX_EFFECT_EVENT, onTtfxEffect)
 
     /** Whether a device-px point is inside the wordmark's box. The box,
      * not the lit pixels: testing per pixel made the hover flicker off in
@@ -463,7 +530,7 @@ export function HeroPixelField({
     const onControl = (target: EventTarget | null) =>
       target instanceof Element &&
       target.closest(
-        'a, button, input, select, textarea, label, [role="button"], header, [data-no-stamp]',
+        'a, button, input, select, textarea, label, summary, [role="button"], header, [data-no-stamp], [data-tools-region]',
       ) !== null
 
     /** 0..1: how far a held press has charged. */
@@ -498,24 +565,35 @@ export function HeroPixelField({
         ? document.querySelector<HTMLElement>('[data-hero-wordmark]')
         : null
       const slotBox = slot?.getBoundingClientRect()
-      const slotWidth =
+      const textSlotWidth =
         (slotBox?.width ??
           Math.min(SLOT_FRACTION * (box.width - SLOT_INSET), SLOT_MAX)) * dpr
-      // With no slot, the lattice is anchored where the hero's slot would
-      // sit: centred, at the same width. Matching the cell size was not
-      // enough on its own - the two fields ran half a cell out of phase with
-      // each other, so their columns did not line up. The row phase cannot
-      // be matched the same way, since the hero's slot is placed by a flex
-      // ratio against the viewport height rather than by a rule this can
-      // restate; the two blocks are never in view together, and a vertical
-      // offset in a field of noise has nothing to read against anyway.
-      wmX = slotBox ? (slotBox.left - box.left) * dpr : (width - slotWidth) / 2
-      wmY = ((slotBox?.top ?? box.top) - box.top) * dpr
-      wmCW = (slotBox ? slotBox.width * dpr : slotWidth) / glyph.width
-      wmCH =
-        (slotBox
-          ? slotBox.height * dpr
-          : (slotWidth * glyph.height) / glyph.width) / glyph.height
+      const textSlotHeight =
+        (slotBox?.height ?? (textSlotWidth * glyph.height) / glyph.width) *
+        (slotBox ? dpr : 1)
+      // Once TTFX owns the wordmark, its background lattice is deliberately
+      // independent from text size and position. The static first-paint logo
+      // remains snapped to its own slot until WASM has taken over.
+      const backgroundSlotWidth =
+        Math.min(SLOT_FRACTION * (box.width - SLOT_INSET), SLOT_MAX) *
+        dpr *
+        backgroundScale
+      const backgroundSlotHeight = (backgroundSlotWidth * glyph.height) / glyph.width
+      if (ttfxActive) {
+        wmX = (width - backgroundSlotWidth) / 2
+        wmY = (height - backgroundSlotHeight) / 2
+        wmCW = backgroundSlotWidth / glyph.width
+        wmCH = backgroundSlotHeight / glyph.height
+      } else {
+        wmX = slotBox
+          ? (slotBox.left - box.left) * dpr
+          : (width - textSlotWidth) / 2
+        wmY = ((slotBox?.top ?? box.top) - box.top) * dpr
+        wmCW = textSlotWidth / glyph.width
+        wmCH = textSlotHeight / glyph.height
+      }
+      canvas.dataset.backgroundCellWidth = wmCW.toFixed(4)
+      canvas.dataset.backgroundCellHeight = wmCH.toFixed(4)
 
       // Publish the lattice so DOM controls over the hero (the CTAs, the
       // floating navbar) can snap themselves onto the same grid. Publishing
@@ -604,7 +682,24 @@ export function HeroPixelField({
     }
 
     const draw = (time: number) => {
-      const t = reducedMotion ? 0 : time / 1000
+      omarchyRadio.analyze(time)
+      canvas.dataset.volume = audioAnalysis.volume.toFixed(3)
+      canvas.dataset.beat = audioAnalysis.beat ? '1' : '0'
+      const t = reducedMotion
+        ? 0
+        : (time / 1000) *
+          (1 + audioAnalysis.volume * 0.7 + audioAnalysis.beat * 0.18)
+
+      const beatNow = audioAnalysis.beat > 0
+      const musicEnergy = Math.min(
+        1,
+        audioAnalysis.volume * 1.35 + (beatNow ? 0.38 : 0),
+      )
+      // The existing cloud around the cursor breathes with the mix. Keeping
+      // its cells and its falloff intact preserves the original effect; only
+      // its radius and intensity grow on a beat and settle afterwards.
+      const cursorCloudScale = cursorScale * (1 + musicEnergy * 0.72)
+      canvas.dataset.cursorCloudScale = cursorCloudScale.toFixed(3)
 
       // The wander: on once the pointer has been still long enough, or
       // never came, and off the moment it moves. It eases in slowly and
@@ -672,12 +767,14 @@ export function HeroPixelField({
       }
 
       // The reach follows the strength, so a quiet response is a smaller
-      // patch as well as a fainter one. A beat pushes it out.
+      // patch as well as a fainter one. Both the existing beat pulse and the
+      // TTFX analysis expand it without changing its falloff.
       const reach =
         CURSOR_CELLS *
         wmCW *
         (0.45 + 0.55 * strength) *
-        (1 + BEAT_REACH * beatPulse)
+        (1 + BEAT_REACH * beatPulse) *
+        cursorCloudScale
 
       // Resolve each live click stamp once per frame, not once per cell.
       const stamps: {
@@ -725,6 +822,13 @@ export function HeroPixelField({
         return amp
       }
 
+      const bottomOscillatorTop = height - Math.max(72 * dpr, height * 0.16)
+      let bottomFieldParticles = 0
+      let bottomEdgeParticles = 0
+      let bottomCenterParticles = 0
+      let highFrequencyParticles = 0
+      let highFrequencyEnergy = 0
+
       for (let r = 0; r < rows; r++) {
         const row = rMin + r
         const yTop = wmY + row * wmCH
@@ -733,11 +837,22 @@ export function HeroPixelField({
         const cy = yTop + wmCH / 2
         for (let c = 0; c < cols; c++) {
           const col = cMin + c
+          const xLeft = wmX + col * wmCW
+          const cx = xLeft + wmCW / 2
+          // The lower field keeps its existing grain but allocates a taller,
+          // brighter band toward both sides. Its thin center and heavy edges
+          // form the hero's U rather than a rectangular equalizer block.
+          const edgeWeight = Math.min(1, Math.abs(cx - width / 2) / (width / 2)) ** 1.55
+          const localOscillatorTop =
+            height -
+            (height - bottomOscillatorTop) * (0.18 + edgeWeight * 0.82)
+          const bottomParticle = isHero && cy >= localOscillatorTop
           // Cells the wordmark occupies belong to the wordmark. On this
           // grid that is a plain index check: the logo IS cells 0..80 x
           // 0..18, so field and logo pixels butt edge to edge everywhere.
           if (
             isHero &&
+            !ttfxActive &&
             col >= 0 &&
             col < glyph.width &&
             row >= 0 &&
@@ -747,6 +862,20 @@ export function HeroPixelField({
             continue
           }
 
+          const audioBandIndex = Math.min(
+            audioAnalysis.bands.length - 1,
+            Math.floor(
+              (c / Math.max(1, cols)) * audioAnalysis.bands.length,
+            ),
+          )
+          const audioBand = audioAnalysis.bands[audioBandIndex]
+          // A sparse deterministic subset of high-frequency particles can
+          // brighten, preserving the field's contour instead of adding a
+          // separate visualizer layer.
+          const highFrequencyCandidate =
+            audioBandIndex >= Math.floor(audioAnalysis.bands.length * 0.7) &&
+            jitter[(row * 37 + col * 11) & 4095] > 0.58
+          let highFrequencySpark = 0
           const shade = ramp[r * cols + c]
           let lum = 0
 
@@ -765,14 +894,16 @@ export function HeroPixelField({
               0.5 *
                 Math.sin(t * 1.1 + jitter[(row * 37 + col * 11) & 4095] * 6.283)
 
-            // The ramp decides where the texture lives; the drifting noise
-            // and the twinkle only make it breathe, so the composition
-            // stays put.
-            lum = shade * (0.3 + 0.52 * base * base + 0.18 * twinkle) * 0.62
+            lum =
+              shade *
+              ((0.3 + 0.52 * base * base + 0.18 * twinkle) * 0.62 +
+                audioBand * 0.22 +
+                audioAnalysis.beat * 0.06)
+            if (highFrequencyCandidate) {
+              highFrequencySpark = Math.min(1, audioBand * 1.2)
+              lum += highFrequencySpark
+            }
           }
-
-          const xLeft = wmX + col * wmCW
-          const cx = xLeft + wmCW / 2
 
           let glowAmount = 0
           if (strength > 0.01) {
@@ -785,7 +916,7 @@ export function HeroPixelField({
               // pointer dragging a solid blob of pixels around.
               const falloff = 1 - dist / reach
               glowAmount = falloff * falloff * strength
-              lum += glowAmount * 0.6
+              lum += glowAmount * (0.6 + musicEnergy * 0.22)
             }
           }
 
@@ -832,17 +963,38 @@ export function HeroPixelField({
             0.22 * jitter[(row & 63) * 64 + (col & 63)]
           if (lum <= threshold) continue
 
+          if (bottomParticle) {
+            bottomFieldParticles++
+            if (edgeWeight > 0.5) bottomEdgeParticles++
+            else if (edgeWeight < 0.25) bottomCenterParticles++
+          }
+          if (highFrequencyCandidate) {
+            highFrequencyParticles++
+            highFrequencyEnergy += highFrequencySpark
+          }
+
           const heat = Math.max(
             glowAmount,
             waveAmount,
             specAmount * SPECTRUM_HEAT,
+            highFrequencySpark * 1.2,
           )
           ctx.fillStyle =
-            heat > 0.34 ? palette.lit : heat > 0.1 ? palette.mid : palette.dim
+            heat > 0.34 ? palette.crest : heat > 0.1 ? palette.lit : palette.dim
           const x = Math.round(xLeft)
           ctx.fillRect(x, y, Math.round(xLeft + wmCW) - x, cellH)
         }
       }
+
+      canvas.dataset.bottomFieldParticles = String(bottomFieldParticles)
+      canvas.dataset.bottomEdgeParticles = String(bottomEdgeParticles)
+      canvas.dataset.bottomCenterParticles = String(bottomCenterParticles)
+      canvas.dataset.highFrequencyParticles = String(highFrequencyParticles)
+      canvas.dataset.highFrequencyEnergy = (
+        highFrequencyParticles
+          ? highFrequencyEnergy / highFrequencyParticles
+          : 0
+      ).toFixed(3)
 
       // The wordmark, stamped into the same cells. It never moves or
       // dissolves. What touches it is the pointer passing over it and a
@@ -860,7 +1012,7 @@ export function HeroPixelField({
       // fractional grid, so adjacent cells always meet exactly: no seams
       // inside letters, and the outer edge lands on the same pixels as the
       // SSR fallback the canvas replaces.
-      for (let row = 0; isHero && row < glyph.height; row++) {
+      for (let row = 0; isHero && !ttfxActive && row < glyph.height; row++) {
         const bits = glyph.rows[row]
         const yTop = wmY + row * wmCH
         const y = Math.round(yTop)
@@ -1017,6 +1169,11 @@ export function HeroPixelField({
     }
 
     const onPointerDown = (event: PointerEvent) => {
+      if (onControl(event.target)) {
+        logoPending = false
+        holding = null
+        return
+      }
       if (!visible) return
       const { inside, x, y } = locate(event)
       if (!inside) return
@@ -1028,7 +1185,6 @@ export function HeroPixelField({
         return
       }
       logoPending = false
-      if (reducedMotion || onControl(event.target)) return
       // The press owns the stage: the hover glow fades out while holding
       // so the charging glyph reads clean, and comes back on release.
       targetStrength = 0
@@ -1036,6 +1192,11 @@ export function HeroPixelField({
     }
 
     const onPointerUp = (event: PointerEvent) => {
+      if (onControl(event.target)) {
+        logoPending = false
+        holding = null
+        return
+      }
       if (logoPending) {
         logoPending = false
         const { inside, x, y } = locate(event)
@@ -1071,6 +1232,12 @@ export function HeroPixelField({
         },
       ]
       holding = null
+      const radioWasStarted = omarchyRadio.getSnapshot().started
+      void omarchyRadio.start()
+      // First click starts the supplied music and replays thunderstorm from
+      // its first frame; later background clicks advance through the catalog.
+      if (radioWasStarted) nextEffect()
+      else playEffect()
     }
 
     // Losing the pointer, or the right-click theme picker opening over a
@@ -1113,6 +1280,14 @@ export function HeroPixelField({
     )
     visibility.observe(host)
 
+    const onTtfxSettings = (event: Event) => {
+      const nextSettings = normalizeSettings((event as CustomEvent).detail)
+      backgroundScale = nextSettings.backgroundScale
+      cursorScale = nextSettings.cursorScale
+      if (measure()) draw(performance.now())
+    }
+    window.addEventListener(TTFX_SETTINGS_EVENT, onTtfxSettings)
+
     if (finePointer) {
       window.addEventListener('pointermove', onPointerMove, { passive: true })
     }
@@ -1143,6 +1318,9 @@ export function HeroPixelField({
       visibility.disconnect()
       window.removeEventListener(THEME_EVENT, onTheme)
       window.removeEventListener(PICKER_STATE_EVENT, onPickerState)
+      window.removeEventListener(WEB_TTFX_READY_EVENT, onTtfxReady)
+      window.removeEventListener(TTFX_SETTINGS_EVENT, onTtfxSettings)
+      window.removeEventListener(WEB_TTFX_EFFECT_EVENT, onTtfxEffect)
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('pointerup', onPointerUp)
