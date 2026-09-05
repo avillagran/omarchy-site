@@ -690,10 +690,10 @@ export function HeroPixelField({
         : (time / 1000) *
           (1 + audioAnalysis.volume * 0.7 + audioAnalysis.beat * 0.18)
 
-      const beatNow = audioAnalysis.beat > 0
+      const ttfxBeat = audioAnalysis.beat > 0
       const musicEnergy = Math.min(
         1,
-        audioAnalysis.volume * 1.35 + (beatNow ? 0.38 : 0),
+        audioAnalysis.volume * 1.35 + (ttfxBeat ? 0.38 : 0),
       )
       // The existing cloud around the cursor breathes with the mix. Keeping
       // its cells and its falloff intact preserves the original effect; only
