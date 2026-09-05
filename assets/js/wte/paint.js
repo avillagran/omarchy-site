@@ -368,6 +368,17 @@ function assignGlobalAlpha(ctx, state, alpha) {
   ctx.globalAlpha = alpha;
   state.alpha = alpha;
 }
+function fillPixelRect(ctx, x, y, width, height) {
+  // Adjacent TTFX cells often begin on fractional CSS pixels. Painting their
+  // widths independently anti-aliases the shared edge into a dark hairline.
+  // Snap both endpoints (not just width) so neighboring cells resolve to the
+  // same boundary and remain gapless at every DPR.
+  const left = Math.round(x)
+  const top = Math.round(y)
+  const right = Math.round(x + width)
+  const bottom = Math.round(y + height)
+  if (right > left && bottom > top) ctx.fillRect(left, top, right - left, bottom - top)
+}
 function paintGlyph(ctx, cp, x, y, cellWidth, cellHeight, fontSize, packed, italic, bold, paintState, geometry, family) {
   if (geometry) {
     if (geometry.fills.length === 0 && geometry.strokes.length === 0) {
@@ -377,7 +388,7 @@ function paintGlyph(ctx, cp, x, y, cellWidth, cellHeight, fontSize, packed, ital
       assignFillPacked(ctx, paintState, packed);
       for (const fill of geometry.fills) {
         assignGlobalAlpha(ctx, paintState, fill.a ?? 1);
-        ctx.fillRect(x + fill.x, y + fill.y, fill.w, fill.h);
+        fillPixelRect(ctx, x + fill.x, y + fill.y, fill.w, fill.h);
         PAINT_WORK.fillRects += 1;
       }
     }
@@ -470,13 +481,13 @@ function paintGlyphSpanRun(ctx, state, run, cellHeight) {
   if (run.bg && !geometry.covers) {
     assignGlobalAlpha(ctx, state, 1);
     assignFillPacked(ctx, state, run.bg);
-    ctx.fillRect(run.x, run.y, run.w, cellHeight);
+    fillPixelRect(ctx, run.x, run.y, run.w, cellHeight);
     PAINT_WORK.fillRects += 1;
   }
   assignFillPacked(ctx, state, run.packed);
   for (const fill of geometry.fills) {
     assignGlobalAlpha(ctx, state, fill.a ?? 1);
-    ctx.fillRect(run.x + fill.x, run.y + fill.y, run.w, fill.h);
+    fillPixelRect(ctx, run.x + fill.x, run.y + fill.y, run.w, fill.h);
     PAINT_WORK.fillRects += 1;
   }
   run.w = 0;
