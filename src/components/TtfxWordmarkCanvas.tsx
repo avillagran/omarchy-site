@@ -103,7 +103,7 @@ const MAX_CATCH_UP_MS = FRAME_MS * 4
 const TTFX_RESOLUTION = 2
 const WASM_URL = '/assets/js/ttfx-audio/ttfx_audio_bg.wasm?v=20260905-1810'
 const TTFX_MODULE_URL = '/assets/js/ttfx-audio/ttfx_audio.js?v=20260905-1810'
-const PAINT_MODULE_URL = '/assets/js/wte/paint.js?v=20260905-1810'
+const PAINT_MODULE_URL = '/assets/js/wte/paint.js?v=20260905-1840'
 const PADDING_X = 6
 const PADDING_Y = 4
 
