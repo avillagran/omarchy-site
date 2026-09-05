@@ -241,6 +241,8 @@ export function TtfxWordmarkCanvas() {
     let animationFrame = 0
     let readySent = false
     let activated = false
+    let loading = false
+    let deferredLoad = 0
 
     const stopSession = () => {
       session?.free()
@@ -443,13 +445,52 @@ export function TtfxWordmarkCanvas() {
       animationFrame = requestAnimationFrame(tick)
     }
 
+    const loadRuntime = () => {
+      if (loading || disposed || (ttfx && paint)) return
+      loading = true
+      canvas.dataset.runtime = 'loading'
+      void Promise.all([
+        import(/* @vite-ignore */ TTFX_MODULE_URL) as Promise<TtfxModule>,
+        import(/* @vite-ignore */ PAINT_MODULE_URL) as Promise<PaintModule>,
+        fetch(WASM_URL).then((response) => {
+          if (!response.ok) throw new Error(`ttfx audio wasm ${response.status}`)
+          return response.arrayBuffer()
+        }),
+      ])
+        .then(async ([ttfxModule, paintModule, bytes]) => {
+          await ttfxModule.default({ module_or_path: bytes })
+          if (disposed) return
+          ttfx = ttfxModule
+          paint = paintModule
+          const catalog = JSON.parse(ttfx.effect_catalog()) as { name: string }[]
+          const catalogNames = new Set(catalog.map(({ name }) => name))
+          canvas.dataset.catalogCount = String(catalog.length)
+          canvas.dataset.resolution = String(TTFX_RESOLUTION)
+          canvas.dataset.catalogComplete = String(
+            WEB_TTFX_EFFECTS.every((effect) => catalogNames.has(effect)),
+          )
+          canvas.dataset.runtime = 'ready'
+          if (activated) {
+            startEffect(currentEffect)
+            startLoop()
+          }
+        })
+        .catch((error: unknown) => {
+          canvas.dataset.engine = 'fallback'
+          canvas.dataset.error = String(error)
+        })
+    }
+
     const onEffect = (event: Event) => {
       const effect = (event as CustomEvent<{ effect?: WebTtfxEffect }>).detail
         .effect
       if (!effect || !WEB_TTFX_EFFECTS.includes(effect)) return
       currentEffect = effect
       activated = true
-      if (!ttfx || !paint) return
+      if (!ttfx || !paint) {
+        loadRuntime()
+        return
+      }
       startEffect(effect)
       startLoop()
     }
@@ -457,7 +498,10 @@ export function TtfxWordmarkCanvas() {
       settings = normalizeSettings((event as CustomEvent<TtfxSettings>).detail)
       applyTtfxLayout(settings)
       activated = true
-      if (!ttfx || !paint) return
+      if (!ttfx || !paint) {
+        loadRuntime()
+        return
+      }
       startEffect(currentEffect)
       startLoop()
     }
@@ -473,39 +517,15 @@ export function TtfxWordmarkCanvas() {
     const slot = document.querySelector<HTMLElement>('[data-hero-wordmark]')
     if (slot) resize.observe(slot)
 
-    void Promise.all([
-      import(/* @vite-ignore */ TTFX_MODULE_URL) as Promise<TtfxModule>,
-      import(/* @vite-ignore */ PAINT_MODULE_URL) as Promise<PaintModule>,
-      fetch(WASM_URL).then((response) => {
-        if (!response.ok) throw new Error(`ttfx audio wasm ${response.status}`)
-        return response.arrayBuffer()
-      }),
-    ])
-      .then(async ([ttfxModule, paintModule, bytes]) => {
-        await ttfxModule.default({ module_or_path: bytes })
-        if (disposed) return
-        ttfx = ttfxModule
-        paint = paintModule
-        const catalog = JSON.parse(ttfx.effect_catalog()) as { name: string }[]
-        const catalogNames = new Set(catalog.map(({ name }) => name))
-        canvas.dataset.catalogCount = String(catalog.length)
-        canvas.dataset.resolution = String(TTFX_RESOLUTION)
-        canvas.dataset.catalogComplete = String(
-          WEB_TTFX_EFFECTS.every((effect) => catalogNames.has(effect)),
-        )
-        if (activated) {
-          startEffect(currentEffect)
-          startLoop()
-        }
-      })
-      .catch((error: unknown) => {
-        canvas.dataset.engine = 'fallback'
-        canvas.dataset.error = String(error)
-      })
+    // Keep the critical path to the SSR vector logo. The monolithic runtime
+    // is scheduled after first paint (or loaded immediately on interaction),
+    // so a slow connection never delays the first visible wordmark.
+    deferredLoad = window.setTimeout(loadRuntime, 1500)
 
     return () => {
       disposed = true
       cancelAnimationFrame(animationFrame)
+      window.clearTimeout(deferredLoad)
       resize.disconnect()
       window.removeEventListener(WEB_TTFX_EFFECT_EVENT, onEffect)
       window.removeEventListener(THEME_EVENT, onTheme)

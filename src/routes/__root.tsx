@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import {
   HeadContent,
   Link,
@@ -56,16 +57,6 @@ export const Route = createRootRoute({
     scripts: [{ children: themeInitScript }],
     links: [
       { rel: 'stylesheet', href: appCss },
-      // The wordmark is the largest thing above the fold on the home page.
-      {
-        rel: 'preload',
-        href: '/brand/omarchy-wordmark.svg',
-        as: 'image',
-        type: 'image/svg+xml',
-        // mask-image fetches CORS-anonymous; a preload without this is a
-        // different credentials mode and the browser discards it.
-        crossOrigin: 'anonymous',
-      },
       {
         rel: 'preload',
         href: geistWoff2,

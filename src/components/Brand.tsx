@@ -1,5 +1,11 @@
 import { NOT_FOUND_HEIGHT, NOT_FOUND_WIDTH } from '@/data/not-found-bitmap'
 import { cn } from '@/lib/utils'
+import wordmarkSvg from '../assets/omarchy-wordmark.svg?raw'
+
+// Inline the shipped vector mask so the first wordmark paints from SSR markup
+// without an extra network round trip. The SVG is used only for alpha; theme
+// colour still comes from currentColor.
+const OMARCHY_WORDMARK_MASK = `url("data:image/svg+xml,${encodeURIComponent(wordmarkSvg)}")`
 
 /**
  * The brand marks, drawn in currentColor so they follow the active theme:
@@ -84,10 +90,10 @@ export function OmarchyWordmark({
         aspectRatio: '4131 / 950',
         backgroundColor: 'currentColor',
         backgroundImage: background,
-        maskImage: 'url(/brand/omarchy-wordmark.svg)',
+        maskImage: OMARCHY_WORDMARK_MASK,
         maskRepeat: 'no-repeat',
         maskSize: '100% 100%',
-        WebkitMaskImage: 'url(/brand/omarchy-wordmark.svg)',
+        WebkitMaskImage: OMARCHY_WORDMARK_MASK,
         WebkitMaskRepeat: 'no-repeat',
         WebkitMaskSize: '100% 100%',
       }}

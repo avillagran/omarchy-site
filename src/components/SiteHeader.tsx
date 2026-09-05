@@ -9,7 +9,6 @@ import {
   SearchIcon,
 } from '@/components/icons'
 import { OmarchyMarkDrawn } from '@/components/Brand'
-import { OmarchyRadioPlayer } from '@/components/OmarchyRadioPlayer'
 import { Button } from '@/components/ui/button'
 import { useHashLink, useTopLink } from '@/lib/hash-scroll'
 import { OPEN_PICKER_EVENT, THEME_EVENT, groundOf } from '@/lib/theme'
@@ -523,7 +522,7 @@ export function SiteHeader() {
             : 'blur(calc(var(--nav-surface, 0) * 12px))',
         }}
       >
-        <div className="radio-header-row relative mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
+        <div className="relative mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
           {glyph}
 
           <nav aria-label="Main" className="hidden items-center sm:flex">
@@ -538,8 +537,6 @@ export function SiteHeader() {
               </Link>
             ))}
           </nav>
-
-          <OmarchyRadioPlayer />
 
           <div className="ml-auto flex items-center gap-2.5">
             <div className="hidden items-center gap-1 sm:flex">
@@ -696,7 +693,7 @@ export function HeroNavGhost() {
       // inline opacity it never rendered and reports a hydration mismatch.
       style={{ paddingTop: 'env(safe-area-inset-top)', opacity: 1 }}
     >
-      <div className="radio-header-row relative mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
+      <div className="relative mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
         {/* Holds the mark's slot without painting it */}
         <span className="flex items-center">
           <span className="block size-[22px] shrink-0 lg:size-[calc(var(--pxc)*2)]" />
@@ -713,8 +710,6 @@ export function HeroNavGhost() {
             </span>
           ))}
         </span>
-
-        <OmarchyRadioPlayer ghost />
 
         <span className="ml-auto flex items-center gap-2.5">
           <span
